@@ -2,7 +2,8 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const engine=require('../engine.js');
-const data=require('../strategy-data.js');
+const catalogue=require('../strategy-data.js');
+const data=catalogue.models['8bb'];
 const hashes=require('./reviewed-range-hashes.json');
 const cases=[
  ['CO',{},'A1'],
@@ -14,12 +15,12 @@ const cases=[
 test('reviewed data retains its source identity and every independently exported range hash',()=>{
  assert.equal(data.sourceSha256,'9735d6a275bcb5cacfffb27df93d2b696655c72bb251d7b30664468357e4f2bb');
  assert.equal(Object.keys(data.ranges).length,14);
- for(const [node,range] of Object.entries(data.ranges)){
+ for(const [game,model] of Object.entries(catalogue.models))for(const [node,range] of Object.entries(model.ranges)){
   const actual=crypto.createHash('sha256').update(JSON.stringify({play:range.play,borderlineFold:range.borderlineFold})).digest('hex');
-  assert.equal(actual,hashes[node],node);assert.equal(new Set(range.play).size,range.play.length);assert.ok(!range.play.some(h=>range.borderlineFold.includes(h)));
+  assert.equal(actual,hashes[game][node],game+': '+node);assert.equal(new Set(range.play).size,range.play.length);assert.ok(!range.play.some(h=>range.borderlineFold.includes(h)));
  }
 });
-for(const [position,actions,node] of cases) test('all 169 hands map to reviewed table '+node,()=>{
+for(const [game,data] of Object.entries(catalogue.models))for(const [position,actions,node] of cases) test(game+': all 169 hands map to reviewed table '+node,()=>{
  const ranks=engine.RANKS;
  for(let i=0;i<13;i++)for(let j=0;j<13;j++){
   const hand=i===j ? ranks[i]+ranks[j] : i<j ? ranks[i]+ranks[j]+'s' : ranks[j]+ranks[i]+'o';
@@ -27,6 +28,19 @@ for(const [position,actions,node] of cases) test('all 169 hands map to reviewed 
   assert.equal(answer.status,'ready');assert.equal(answer.node,node);assert.equal(answer.hand,hand);
   const expected=data.ranges[node].play.includes(hand) ? Object.values(actions).includes('allin') ? 'call':'allin' : 'fold';
   assert.equal(answer.action,expected,node+': '+hand);assert.equal(answer.borderline,data.ranges[node].borderlineFold.includes(hand));
+ }
+});
+test('every buy-in uses its reviewed stack and blind structure, starting at $1',()=>{
+ assert.equal(catalogue.defaultBuyIn,'1');
+ assert.deepEqual(catalogue.buyIns.map(s=>s.amountUSD),[1,2,4,8,16,32,80,160]);
+ assert.equal(catalogue.models['10bb'].sourceSha256,'36cffe7ba3bf1798b7dd51a54b0546951e74a44a4619a338bf55b55c2e0e620a');
+ assert.equal(catalogue.models['8bb_sb04'].sourceSha256,'01671b1920dcd7dcbe9fd0b404f12124b8b4cb8062c774a36eb8e5b4ab472980');
+ for(const stake of catalogue.buyIns){
+  const model=catalogue.models[stake.model];
+  assert.equal(model.stackBB,stake.amountUSD/stake.bigBlindUSD);
+  assert.equal(model.smallBlindBB,stake.smallBlindUSD/stake.bigBlindUSD);
+  assert.equal(Object.keys(model.ranges).length,14);
+  assert.equal(stake.model,stake.id==='1'?'10bb':stake.id==='2'?'8bb_sb04':'8bb');
  }
 });
 test('BTN and SB use separate call ranges against CO',()=>{

@@ -2,9 +2,22 @@
   'use strict';
   const engine = window.AoFEngine;
   const data = window.AoFData;
-  const state = {position:null, ranks:[], suit:null, actions:{}};
+  const state = {buyIn:data.defaultBuyIn, position:null, ranks:[], suit:null, actions:{}};
   const $ = id => document.getElementById(id);
-  const seatNames = {CO:'Cutoff',BTN:'Button',SB:'Small Blind',BB:'Big Blind'};
+  const selectedStake = () => data.buyIns.find(stake => stake.id===state.buyIn);
+  const selectedModel = () => data.models[selectedStake().model];
+  const number = value => String(value).replace('.',',');
+  for (const stake of data.buyIns) {
+    const option=document.createElement('option');option.value=stake.id;option.textContent='$'+stake.amountUSD;
+    $('buy-in').append(option);
+  }
+  $('buy-in').value=state.buyIn;
+  $('buy-in').addEventListener('change',() => {state.buyIn=$('buy-in').value;renderFormat();renderResult();});
+  function renderFormat() {
+    const stake=selectedStake(),model=selectedModel();
+    $('game-format').textContent=model.stackBB+' BB · SB '+number(model.smallBlindBB);
+    $('game-format').title='$'+stake.smallBlindUSD+' / $'+stake.bigBlindUSD;
+  }
   function button(text, attrs) {
     const element = document.createElement('button');element.type='button';element.textContent=text;
     for (const [key,value] of Object.entries(attrs || {})) element.setAttribute(key,value);
@@ -30,15 +43,12 @@
   $('new-hand').addEventListener('click',() => {state.ranks=[];state.suit=null;state.actions={};render();});
   function renderPosition() {
     document.querySelectorAll('[data-position]').forEach(b => b.setAttribute('aria-pressed',String(b.dataset.position===state.position)));
-    const prior=engine.priorPositions(state.position);
-    $('position-description').textContent=state.position ? (prior.length ? prior.length+' vor dir' : 'Du bist zuerst dran') : 'Zuerst auswählen';
   }
   function renderHand() {
     ['card-one','card-two'].forEach((id,i) => {$(id).textContent=state.ranks[i] || '?';$(id).classList.toggle('empty',!state.ranks[i]);});
     const pair=state.ranks.length===2 && state.ranks[0]===state.ranks[1];
     const hand=engine.normalizeHand(state.ranks,state.suit);
-    $('hand-label').textContent=hand || (state.ranks.length===2 ? state.ranks.join('') : state.ranks.length===1 ? 'Zweite Karte' : 'Karten wählen');
-    $('hand-hint').textContent=pair ? 'Paar' : hand ? (state.suit==='s' ? 's · gleiche Kartenfarbe' : 'o · verschiedene Farben') : state.ranks.length===2 ? 'Noch s oder o wählen' : 'Zwei Ränge nacheinander';
+    $('hand-label').textContent=hand || (state.ranks.length===2 ? 's / o?' : '—');
     $('clear-hand').disabled=state.ranks.length===0;
     document.querySelectorAll('[data-rank]').forEach(b => {b.disabled=!state.position;b.dataset.selected=String(state.ranks.includes(b.dataset.rank));});
     document.querySelectorAll('[data-suit]').forEach(b => {b.disabled=!state.position || state.ranks.length!==2 || pair;b.setAttribute('aria-pressed',String(!pair && state.suit===b.dataset.suit));});
@@ -46,18 +56,14 @@
   function renderOpponents() {
     const container=$('opponents');container.replaceChildren();
     const prior=engine.priorPositions(state.position);
-    const complete=prior.filter(p => state.actions[p]).length;
-    $('action-progress').textContent=prior.length ? complete+' / '+prior.length : '';
     if (!state.position || !prior.length) {
-      const p=document.createElement('p');p.className='placeholder';p.textContent=state.position ? 'Niemand vor dir. Du kannst eröffnen.' : 'Wähle zuerst deine Position.';container.append(p);return;
+      const p=document.createElement('p');p.className='placeholder';p.textContent=state.position ? 'Niemand vor dir' : 'Position wählen';container.append(p);return;
     }
     let previousAllin=false;
     for (const position of prior) {
       const row=document.createElement('div');row.className='action-row';
       const name=document.createElement('div');name.className='opponent-name';
-      const seat=document.createElement('span');seat.className='opponent-seat';seat.textContent=position;
-      const detail=document.createElement('span');detail.className='opponent-detail';detail.textContent=seatNames[position];
-      name.append(seat,detail);
+      name.textContent=position;
       const group=document.createElement('div');group.className='action-options';group.setAttribute('role','group');group.setAttribute('aria-label','Aktion '+position);
       for (const action of ['fold','allin']) {
         const label=action==='fold' ? 'Fold' : previousAllin ? 'Call · all-in' : 'All-in';
@@ -77,22 +83,24 @@
     }
   }
   function renderResult() {
-    const answer=engine.evaluate(state,data);
+    const model=selectedModel();
+    const answer=engine.evaluate(state,model);
     const hand=engine.normalizeHand(state.ranks,state.suit);
-    let title,description,tone='empty',marker='· · ·';
-    let context=state.position ? state.position+' · '+(hand || 'Hand offen') : 'Dein Spot in drei Schritten';
+    let title,description='',tone='empty',marker='· · ·';
+    let context=state.position || '';
     if (answer.status==='ready') {
       context=state.position+' · '+(answer.action==='walk' ? 'Alle vor dir folden' : answer.allins.length ? answer.allins.join(' + ')+' all-in' : 'Ungeöffneter Pot');
-      if (answer.action==='walk') {title='Blinds gewonnen';description='Alle haben gefoldet. Keine Entscheidung nötig.';tone='play';marker='✓';}
-      else if (answer.action==='fold') {title='FOLD';description=answer.borderline ? 'Knapper Modellfall. In dieser Tabelle folden.' : 'Diese Hand liegt außerhalb des Spielbereichs.';tone='fold';marker='−';}
-      else {title=answer.action==='allin' ? 'ALL-IN' : 'CALL';description=answer.action==='allin' ? 'Mit dieser Hand eröffnen.' : 'Das All-in mitgehen.';tone='play';marker='↗';}
-    } else if (answer.status==='error') {title='Tabelle fehlt';description='Die Strategiedaten konnten nicht geladen werden.';}
-    else if (!state.position) {title='Position wählen';description='Danach Hand und Gegneraktionen angeben.';}
-    else if (!hand) {title='Hand wählen';description=state.ranks.length===2 ? 'Wähle s oder o für deine Karten.' : 'Klicke zwei Kartenränge nacheinander an.';}
-    else {title='Aktionen ergänzen';description='Fold oder All-in für jeden Gegner vor dir wählen.';}
+      if (answer.action==='walk') {title='Blinds gewonnen';tone='play';marker='✓';}
+      else if (answer.action==='fold') {title='FOLD';description=answer.borderline ? 'Knapper Modellfall' : '';tone='fold';marker='−';}
+      else {title=answer.action==='allin' ? 'ALL-IN' : 'CALL';tone='play';marker='↗';}
+    } else if (answer.status==='error') {title='Tabelle fehlt';description='Bitte neu laden.';}
+    else if (!state.position) {title='Position wählen';}
+    else if (!hand) {title=state.ranks.length===2 ? 's oder o wählen' : state.ranks.length===1 ? 'Zweite Karte wählen' : 'Hand wählen';}
+    else {title='Aktionen ergänzen';}
     $('result').dataset.tone=tone;$('result-title').textContent=title;$('result-description').textContent=description;$('result-context').textContent=context;$('result-marker').textContent=marker;
-    $('result-hand').textContent=hand || '—';$('result-table').textContent=answer.node ? 'Tabelle '+data.ranges[answer.node].label : '8-BB-Standard';
+    $('result-description').hidden=!description;
+    $('result-hand').textContent=hand || '—';$('result-table').textContent='$'+state.buyIn+(answer.node && model.ranges[answer.node] ? ' · Tabelle '+model.ranges[answer.node].label : '');
   }
   function render() {renderPosition();renderHand();renderOpponents();renderResult();}
-  render();
+  renderFormat();render();
 })();
