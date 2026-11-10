@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#163f35">
-  <meta name="description" content="AoF-Tabellen für vier Spieler: Buy-in, Position, Hand und vorherige Gegneraktionen.">
+  <meta name="description" content="AoF-Tabellen für vier Spieler: Buy-in, Position und Hand wählen, Empfehlungen für alle vorherigen Aktionskombinationen ablesen.">
   <title>AoF · Tabellen</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23163f35'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='Arial' font-size='36' font-weight='bold' fill='white'%3EA%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=882a5b0">
+  <link rel="stylesheet" href="styles.css?v=scenarios-1">
   <script src="strategy-data.js" defer></script>
   <script src="engine.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=scenarios-1" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -45,16 +45,14 @@
         </section>
       </div>
       <div class="result-column">
-        <section class="panel" aria-labelledby="opponents-title">
-          <div class="section-heading"><h2 id="opponents-title">Vor dir</h2></div>
-          <div id="opponents"></div>
-        </section>
-        <section id="result" class="result-panel" data-tone="empty" aria-label="Empfehlung" aria-live="polite" aria-atomic="true">
-          <div class="result-heading"><span>EMPFEHLUNG</span><span id="result-marker" aria-hidden="true">· · ·</span></div>
-          <p id="result-context" class="result-context"></p>
-          <h2 id="result-title">Position wählen</h2>
-          <p id="result-description" hidden></p>
-          <div id="result-foot" class="result-foot"><span id="result-hand">—</span><span id="result-table"></span></div>
+        <section class="panel scenario-panel" aria-labelledby="scenario-title">
+          <div class="section-heading"><h2 id="scenario-title">Empfehlungen</h2><span id="scenario-context" aria-live="polite"></span></div>
+          <p id="scenario-status" class="scenario-status" role="status">Position wählen</p>
+          <table id="scenario-table" class="scenario-table" hidden>
+            <caption class="sr-only">Gegneraktionen vor deinem Zug und deine Empfehlung. Call bedeutet ein All-in mitgehen.</caption>
+            <thead><tr id="scenario-head"></tr></thead>
+            <tbody id="scenario-rows"></tbody>
+          </table>
         </section>
       </div>
     </div>

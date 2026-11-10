@@ -17,11 +17,11 @@ Die beim Laden vorausgewählte Stufe ist $1. Beim Wechsel des Buy-ins werden bes
 
 1. Eigene Position wählen: BB, SB, BTN oder CO.
 2. Zwei Kartenränge nacheinander anklicken. Bei verschiedenen Rängen `s` (suited) oder `o` (offsuit) wählen; Paare brauchen keine Farbangabe.
-3. Für jeden Gegner vor dem eigenen Zug Fold oder All-in auswählen. Nach einem vorherigen All-in heißt die Aktion Call.
+3. Die Zeile mit den tatsächlich beobachteten Gegneraktionen ablesen. Die letzte Spalte „Du“ enthält deine Empfehlung. Es ist keine Gegner-Eingabe erforderlich.
 
-Die passende Tabellenempfehlung erscheint automatisch. Es werden nur vorherige Positionen abgefragt. Fehlende Angaben führen zu keiner Spielentscheidung. Folden CO, BTN und SB, gewinnt der BB die Blinds ohne weitere Entscheidung.
+Für CO erscheint eine Zeile, für BTN zwei, für SB vier und für BB acht. Die Spalten folgen der Reihenfolge CO → BTN → SB und zeigen nur Positionen vor deinem Zug. „All-in“ bezeichnet die erste Eröffnung, „Call“ ein nachfolgendes Mitgehen all-in. Jede Kombination wird separat mit der unveränderten Strategietabelle ausgewertet; es gibt keine Annahme über die tatsächlich gewählte Gegneraktion.
 
-**Neue Hand** behält Buy-in und Position und löscht Karten und Aktionen. Ein Positionswechsel löscht alle Gegneraktionen. Eine geänderte frühere Gegneraktion löscht die folgenden Aktionen, weil sich deren Entscheidungssituation ändert. Keine Speicherung, Anmeldung, Telemetrie oder Verbindung zum Pokerclient.
+Solange die Hand unvollständig ist, bleiben die Empfehlungen leer. Nur „Blinds“ beim BB mit drei vorherigen Folds ist bereits unabhängig von der Hand bestimmt. Die Zeilen aktualisieren sich bei jeder Änderung von Hand, Position oder Buy-in. **Neue Hand** behält Buy-in und Position und löscht die Karten. Keine Speicherung, Anmeldung, Telemetrie oder Verbindung zum Pokerclient.
 
 ## Starten
 
@@ -43,7 +43,7 @@ Die lokale Vorschau läuft unter `http://127.0.0.1:4173`.
 npm test
 ```
 
-Die Tests prüfen sämtliche 14 Aktionspfade und 169 Handklassen in allen drei Modellen (7.098 Kombinationen), die Zuordnung der acht Buy-ins, fehlende/ungültige Angaben, Kartenreihenfolge, getrennte BTN-/SB-Tabellen und den BB-Walk.
+Die Tests prüfen sämtliche 14 Aktionspfade und 169 Handklassen in allen drei Modellen (7.098 Kombinationen), die Zuordnung der acht Buy-ins, fehlende/ungültige Angaben, Kartenreihenfolge, getrennte BTN-/SB-Tabellen und den BB-Walk. Zusätzlich prüfen sie die vollständige Zeilenübersicht mit allen 15 Situationen einschließlich Walk für alle 169 Handklassen und drei Modelle (7.605 Fälle), ohne fehlende, doppelte oder falsch zugeordnete Kombinationen.
 
 ## Strategiegrundlage
 

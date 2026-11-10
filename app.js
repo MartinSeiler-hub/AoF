@@ -1,8 +1,19 @@
-(function () {
+(function (root) {
   'use strict';
-  const engine = window.AoFEngine;
-  const data = window.AoFData;
-  const state = {buyIn:data.defaultBuyIn, position:null, ranks:[], suit:null, actions:{}};
+  function evaluateScenarios(input, model, engine) {
+    const state=input || {};
+    if (!engine.POSITIONS.includes(state.position)) return [];
+    const prior=engine.priorPositions(state.position);
+    return Array.from({length:2 ** prior.length},(_,combination) => {
+      const actions=Object.fromEntries(prior.map((position,index) => [position,combination & (1 << (prior.length-index-1)) ? 'allin' : 'fold']));
+      const answer=engine.evaluate({position:state.position,ranks:state.ranks,suit:state.suit,actions},model);
+      return {actions,answer};
+    });
+  }
+  if (typeof module !== 'undefined' && module.exports) {module.exports={evaluateScenarios};return;}
+  const engine = root.AoFEngine;
+  const data = root.AoFData;
+  const state = {buyIn:data.defaultBuyIn, position:null, ranks:[], suit:null};
   const $ = id => document.getElementById(id);
   const selectedStake = () => data.buyIns.find(stake => stake.id===state.buyIn);
   const selectedModel = () => data.models[selectedStake().model];
@@ -35,12 +46,12 @@
     $('ranks').append(b);
   }
   document.querySelectorAll('[data-position]').forEach(b => b.addEventListener('click',() => {
-    if (state.position !== b.dataset.position) {state.position=b.dataset.position;state.actions={};}
+    state.position=b.dataset.position;
     render();
   }));
   document.querySelectorAll('[data-suit]').forEach(b => b.addEventListener('click',() => {state.suit=b.dataset.suit;renderHand();renderResult();}));
   $('clear-hand').addEventListener('click',() => {state.ranks=[];state.suit=null;renderHand();renderResult();});
-  $('new-hand').addEventListener('click',() => {state.ranks=[];state.suit=null;state.actions={};render();});
+  $('new-hand').addEventListener('click',() => {state.ranks=[];state.suit=null;render();});
   function renderPosition() {
     document.querySelectorAll('[data-position]').forEach(b => b.setAttribute('aria-pressed',String(b.dataset.position===state.position)));
   }
@@ -53,54 +64,41 @@
     document.querySelectorAll('[data-rank]').forEach(b => {b.disabled=!state.position;b.dataset.selected=String(state.ranks.includes(b.dataset.rank));});
     document.querySelectorAll('[data-suit]').forEach(b => {b.disabled=!state.position || state.ranks.length!==2 || pair;b.setAttribute('aria-pressed',String(!pair && state.suit===b.dataset.suit));});
   }
-  function renderOpponents() {
-    const container=$('opponents');container.replaceChildren();
-    const prior=engine.priorPositions(state.position);
-    if (!state.position || !prior.length) {
-      const p=document.createElement('p');p.className='placeholder';p.textContent=state.position ? 'Niemand vor dir' : 'Position wählen';container.append(p);return;
-    }
-    let previousAllin=false;
-    for (const position of prior) {
-      const row=document.createElement('div');row.className='action-row';
-      const name=document.createElement('div');name.className='opponent-name';
-      name.textContent=position;
-      const group=document.createElement('div');group.className='action-options';group.setAttribute('role','group');group.setAttribute('aria-label','Aktion '+position);
-      for (const action of ['fold','allin']) {
-        const label=action==='fold' ? 'Fold' : previousAllin ? 'Call · all-in' : 'All-in';
-        const b=button(label,{'data-actor':position,'data-action':action,'aria-pressed':String(state.actions[position]===action),'aria-label':position+' '+(action==='fold' ? 'Fold' : previousAllin ? 'Call all-in' : 'All-in')});
-        b.addEventListener('click',() => {
-          if (state.actions[position]===action) return;
-          state.actions[position]=action;
-          // A changed earlier action changes the decision faced by later opponents.
-          for (const later of prior.slice(prior.indexOf(position)+1)) delete state.actions[later];
-          renderOpponents();renderResult();
-          const replacement=document.querySelector('[data-actor="'+position+'"][data-action="'+action+'"]');
-          if (replacement) replacement.focus({preventScroll:true});
-        });group.append(b);
-      }
-      row.append(name,group);container.append(row);
-      if (state.actions[position]==='allin') previousAllin=true;
-    }
-  }
   function renderResult() {
     const model=selectedModel();
-    const answer=engine.evaluate(state,model);
     const hand=engine.normalizeHand(state.ranks,state.suit);
-    let title,description='',tone='empty',marker='· · ·';
-    let context=state.position || '';
-    if (answer.status==='ready') {
-      context=state.position+' · '+(answer.action==='walk' ? 'Alle vor dir folden' : answer.allins.length ? answer.allins.join(' + ')+' all-in' : 'Ungeöffneter Pot');
-      if (answer.action==='walk') {title='Blinds gewonnen';tone='play';marker='✓';}
-      else if (answer.action==='fold') {title='FOLD';description=answer.borderline ? 'Knapper Modellfall' : '';tone='fold';marker='−';}
-      else {title=answer.action==='allin' ? 'ALL-IN' : 'CALL';tone='play';marker='↗';}
-    } else if (answer.status==='error') {title='Tabelle fehlt';description='Bitte neu laden.';}
-    else if (!state.position) {title='Position wählen';}
-    else if (!hand) {title=state.ranks.length===2 ? 's oder o wählen' : state.ranks.length===1 ? 'Zweite Karte wählen' : 'Hand wählen';}
-    else {title='Aktionen ergänzen';}
-    $('result').dataset.tone=tone;$('result-title').textContent=title;$('result-description').textContent=description;$('result-context').textContent=context;$('result-marker').textContent=marker;
-    $('result-description').hidden=!description;
-    $('result-hand').textContent=hand || '—';$('result-table').textContent='$'+state.buyIn+(answer.node && model.ranges[answer.node] ? ' · Tabelle '+model.ranges[answer.node].label : '');
+    const prior=engine.priorPositions(state.position);
+    const scenarios=evaluateScenarios(state,model,engine);
+    $('scenario-context').textContent=state.position ? state.position+(hand ? ' · '+hand : '') : '';
+    const status=!state.position ? 'Position wählen' : hand ? '' : state.ranks.length===2 ? 's oder o wählen' : state.ranks.length===1 ? 'Zweite Karte wählen' : 'Hand wählen';
+    $('scenario-status').textContent=status;$('scenario-status').hidden=!status;
+    $('scenario-table').hidden=!state.position;
+    const header=$('scenario-head');header.replaceChildren();
+    for (const label of [...(prior.length ? prior : ['Vor dir']),'Du']) {
+      const cell=document.createElement('th');cell.scope='col';cell.textContent=label;header.append(cell);
+    }
+    const body=$('scenario-rows');body.replaceChildren();
+    for (const {actions,answer} of scenarios) {
+      const row=document.createElement('tr');row.dataset.scenario=prior.map(p=>actions[p]==='allin' ? 'a' : 'f').join('') || 'open';
+      let previousAllin=false;
+      for (const position of prior) {
+        const cell=document.createElement('td');
+        const allin=actions[position]==='allin';
+        cell.textContent=allin ? previousAllin ? 'Call' : 'All-in' : 'Fold';
+        cell.className=allin ? 'scenario-allin' : 'scenario-fold';
+        if (allin && previousAllin) cell.setAttribute('aria-label',position+' callt all-in');
+        row.append(cell);previousAllin=previousAllin || allin;
+      }
+      if (!prior.length) {const cell=document.createElement('td');cell.textContent='Niemand';row.append(cell);}
+      const cell=document.createElement('td'),badge=document.createElement('span');badge.className='decision';
+      const action=answer.status==='ready' ? answer.action : answer.status==='error' ? 'error' : 'empty';
+      badge.dataset.action=action;
+      badge.textContent={allin:'ALL-IN',call:'CALL',fold:'FOLD',walk:'Blinds',empty:'—',error:'Fehlt'}[action];
+      const detail=action==='walk' ? 'Blinds gewonnen: alle vor dir folden.' : action==='error' ? 'Tabelle fehlt. Bitte neu laden.' : action==='empty' ? status : (answer.borderline ? 'Knapper Modellfall. ' : '')+'Tabelle '+model.ranges[answer.node].label;
+      badge.title=detail;badge.setAttribute('aria-label',badge.textContent+'. '+detail);
+      cell.className='scenario-decision';cell.append(badge);row.append(cell);body.append(row);
+    }
   }
-  function render() {renderPosition();renderHand();renderOpponents();renderResult();}
+  function render() {renderPosition();renderHand();renderResult();}
   renderFormat();render();
-})();
+})(typeof globalThis !== 'undefined' ? globalThis : this);
